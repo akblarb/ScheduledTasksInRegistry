@@ -94,7 +94,7 @@ foreach ($key in $allTaskCache) {
         $allTreeCache | ForEach-Object {
             $treeKey = $_
             If (-not [string]::IsNullOrEmpty($treeKey.GetValue("Id"))) {
-                If ($treeKey.GetValue("Id").Contains("{73BD3E1C-DABE-4DF5-A7A6-63906C2CFF11}")){
+                If ($treeKey.GetValue("Id").Contains(($key.split("\"))[-1])){
                     $relatedTreeKey = $treeKey.Name
                     myLogger -myStr "`tRelatedKey(Tree): $($relatedTreeKey)"
                     $regCommandClean = "$($regCommandClean)REG EXPORT ""$($relatedTreeKey)"" ""$($PSScriptRoot)\ID_$($countFound)_TREE_$($timeStamp).reg""`r`nREG DELETE ""$($relatedTreeKey)"" /f`r`n"
