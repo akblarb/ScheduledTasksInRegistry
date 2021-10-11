@@ -1,5 +1,5 @@
 param (
-    [string]$taskCachePath="HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks"
+    [string]$taskCachePath="HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache"#\Tasks
 )
 
 $timeStamp = Get-Date -Format "yyyy.MM.dd_HH.mm.ss.ffff"
@@ -11,9 +11,9 @@ Usage: ThisScript.ps1 -taskCachePath REGISTRYPATH
 
 
 Optional:
-  -taskCachePath REGISTRYPATH        Supply the registry path to \Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks
-                                        If not specified, default path is: HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks
-                                        Specifying a path allows you to look at manually loaded offline registry hives like: HKEY_USERS\ALT_HKLM_SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks
+  -taskCachePath REGISTRYPATH        Supply the registry path to \Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache
+                                        If not specified, default path is: HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache
+                                        Specifying a path allows you to look at manually loaded offline registry hives like: HKEY_USERS\ALT_HKLM_SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache
 
   -h, -help                 Show this message and exit.
                                         
@@ -31,7 +31,7 @@ Function myLogger() {
     If ($warnLvl -eq "info") {
         Write-host $myStr
     } ElseIf ($warnLvl -eq "warn") {
-        Write-host $myStr -ForegroundColor Yello
+        Write-host $myStr -ForegroundColor Yellow
     } ElseIf ($warnLvl -eq "threat") {
         Write-host $myStr -ForegroundColor DarkRed
     }
@@ -41,6 +41,11 @@ Function myLogger() {
 
 If (-not $taskCachePath.StartsWith("HKEY_LOCAL_MACHINE\SOFTWARE")) {
     myLogger -myStr "!!!Operating in Offline Forensic Mode!!!`r`n`t- Logged Registry Keys will reference the offline hives.`r`n`t- Commands to fix will be what need to be run on the infected computer.`r`n`t- Logging of TaskOnDisk will be irrelevant." -warnLvl "warn"
+    $backupFolder = "%UserProfile%\Desktop\$($($MyInvocation.MyCommand.Name).Split(".")[0])"
+    $regCommandClean = "MKDIR ""$($backupFolder)""`r`n"
+}Else{
+    $backupFolder = "$($PSScriptRoot)"
+    $regCommandClean = ""
 }
 
 #Convert args to lowercase
@@ -65,17 +70,16 @@ If ($argsLC.count -ne 0){
 }
 #start looking at the TaskCache
 myLogger -myStr "`r`nExamining Registry $($taskCachePath)Path: "
-$allTaskCache = (ls "Registry::$($taskCachePath)\").Name
+$allTaskCache = (ls "Registry::$($taskCachePath)\Tasks").Name
 $countFound = 0
-$regCommandClean = ""
-$mainTaskCachePath = (($taskCachePath.split("\"))[0..6] -join "\")
-$allTreeCachePath = $mainTaskCachePath+"\Tree"
+$allTreeCachePath = $taskCachePath+"\Tree"
+$allTreeCache = (ls "Registry::$($allTreeCachePath)" -recurse)
+$allKeysTaskCache = (ls "Registry::$($taskCachePath)").PSChildName
 foreach ($key in $allTaskCache) {
     $authorStr = "null"
     $dateStr = "null"
     $existsOnDisk = "null"
     $relatedTreeKey = "null"
-    $allTreeCache = "null"
     $treeKey = "null"
     $actionsByte = (Get-ItemProperty -Path "Registry::$($Key)").Actions
     #myLogger -myStr "`t`tBytes: $($actionsByte)"
@@ -84,20 +88,19 @@ foreach ($key in $allTaskCache) {
         $countFound++
         $authorStr = (Get-ItemProperty -Path "Registry::$($Key)" -ErrorAction SilentlyContinue).Author
         $dateStr = (Get-ItemProperty -Path "Registry::$($Key)" -ErrorAction SilentlyContinue).Date
-        myLogger -myStr "`r`n  Found Item[ID_$($countFound)]:"
+        myLogger -myStr "`r`n  Found Item[ID_$($countFound)]:" -warnLvl "warn"
         myLogger -myStr "`tKey: $($key)"
-        $regCommandClean = "$($regCommandClean)REG EXPORT ""$($key)"" ""$($PSScriptRoot)\ID_$($countFound)_TASK_$($timeStamp).reg""`r`nREG DELETE ""$($key)"" /f`r`n"
+        $regCommandClean = "$($regCommandClean)REG EXPORT ""$($key)"" ""$($backupFolder)\ID_$($countFound)_TASK_$($timeStamp).reg""`r`nREG DELETE ""$($key)"" /f`r`n"
         myLogger -myStr "`t`tCommand(Action): $($actionsStr)" -warnLvl "threat"
         myLogger -myStr "`t`t`tCreatedByUser(Author): $($authorStr)"
         myLogger -myStr "`t`t`tCreatedOn(Date)[MightBeLastRun]: $($dateStr)"
-        $allTreeCache = (ls "Registry::$($allTreeCachePath)" -recurse)
         $allTreeCache | ForEach-Object {
             $treeKey = $_
             If (-not [string]::IsNullOrEmpty($treeKey.GetValue("Id"))) {
                 If ($treeKey.GetValue("Id").Contains(($key.split("\"))[-1])){
                     $relatedTreeKey = $treeKey.Name
                     myLogger -myStr "`tRelatedKey(Tree): $($relatedTreeKey)"
-                    $regCommandClean = "$($regCommandClean)REG EXPORT ""$($relatedTreeKey)"" ""$($PSScriptRoot)\ID_$($countFound)_TREE_$($timeStamp).reg""`r`nREG DELETE ""$($relatedTreeKey)"" /f`r`n"
+                    $regCommandClean = "$($regCommandClean)REG EXPORT ""$($relatedTreeKey)"" ""$($backupFolder)\ID_$($countFound)_TREE_$($timeStamp).reg""`r`nREG DELETE ""$($relatedTreeKey)"" /f`r`n"
                     myLogger -myStr "`t`tTaskOnDisk: $($relatedTreeKey.Replace("$($allTreeCachePath)", "$($env:SystemRoot)\System32\Tasks"))"
                     $existsOnDisk = Test-Path "$($relatedTreeKey.Replace("$($allTreeCachePath)", "$($env:SystemRoot)\System32\Tasks"))" -PathType Leaf
                     myLogger -myStr "`t`t`tExistsOnDisk: $($existsOnDisk)"
@@ -107,7 +110,11 @@ foreach ($key in $allTaskCache) {
                 }
             }
         }
-        
+        ForEach ($keyType in $allKeysTaskCache) {
+            If ($keyType.ToLower() -ne "tree" -Or $keyType.ToLower() -ne "tasks") {
+                Write-host "Its not takss or tree: $($keyType.ToLower())"
+            }
+        }
     }
 }
 
