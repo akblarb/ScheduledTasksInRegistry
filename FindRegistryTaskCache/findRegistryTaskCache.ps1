@@ -84,7 +84,7 @@ foreach ($key in $allTaskCache) {
     $actionsByte = (Get-ItemProperty -Path "Registry::$($Key)").Actions
     #myLogger -myStr "`t`tBytes: $($actionsByte)"
     $actionsStr = (-join ([System.Text.Encoding]::ASCII.GetChars($actionsByte))) -replace '[^\x20-\x7e]+', ''#Gets the action executed by the task, strips all non-printable ASCII characters.
-    If ( $actionsStr.ToLower().Contains("powershell")) {
+    If ( $actionsStr.ToLower().Contains("powershell") -or $actionsStr.ToLower().Contains("FromBase64String".ToLower()) -or $actionsStr.ToLower().Contains("Invoke-Command".ToLower()) ) {
         $countFound++
         $authorStr = (Get-ItemProperty -Path "Registry::$($Key)" -ErrorAction SilentlyContinue).Author
         $dateStr = (Get-ItemProperty -Path "Registry::$($Key)" -ErrorAction SilentlyContinue).Date
