@@ -112,7 +112,7 @@ foreach ($key in $allTaskCache) {
         }
         ForEach ($keyType in $allKeysTaskCache) {
             If ($keyType.ToLower() -ne "tree" -Or $keyType.ToLower() -ne "tasks") {
-                Write-host "Its not takss or tree: $($keyType.ToLower())"
+                Write-host "Its not tasks or tree: $($keyType.ToLower())"
             }
         }
     }
