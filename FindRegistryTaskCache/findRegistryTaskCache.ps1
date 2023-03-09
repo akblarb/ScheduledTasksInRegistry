@@ -19,7 +19,7 @@ Optional:
                                         
 Examples:
   Look at manually loaded SOFTWARE hive
-    ThisScript.ps1 -taskCachePath "HKEY_USERS\ALT_HKLM_SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks"
+    ThisScript.ps1 -taskCachePath "HKEY_USERS\ALT_HKLM_SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache"
 '@
 Function myLogger() {
     param (
